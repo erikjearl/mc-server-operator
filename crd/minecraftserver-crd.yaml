@@ -1,0 +1,81 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: minecraftservers.mc.homelab.io
+spec:
+  group: mc.homelab.io
+  names:
+    kind: MinecraftServer
+    listKind: MinecraftServerList
+    plural: minecraftservers
+    singular: minecraftserver
+    shortNames:
+      - mcs
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - gameVersion
+              properties:
+                seed:
+                  type: string
+                  description: "World generation seed for the speedrun"
+                gameVersion:
+                  type: string
+                  description: "Minecraft version (e.g. 1.16.1)"
+                gameMode:
+                  type: string
+                  enum: [survival, creative, adventure, hardcore]
+                  default: survival
+                difficulty:
+                  type: string
+                  enum: [peaceful, easy, normal, hard]
+                  default: normal
+                maxPlayers:
+                  type: integer
+                  default: 4
+                  minimum: 1
+                  maximum: 20
+                allowCheats:
+                  type: boolean
+                  default: false
+                whitelistedUsers:
+                  type: array
+                  items:
+                    type: string
+                metadataPreset:
+                  type: string
+                  description: "Named speedrun config preset (e.g. java-1.16-any%)"
+                ttlSeconds:
+                  type: integer
+                  description: "Auto-delete server after this many seconds"
+                  minimum: 0
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - name: Version
+          type: string
+          jsonPath: .spec.gameVersion
+        - name: Seed
+          type: string
+          jsonPath: .spec.seed
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Port
+          type: integer
+          jsonPath: .status.port
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

@@ -1,0 +1,25 @@
+# MC SpeedRun Operator — default Helm values
+
+operator:
+  image:
+    repository: ghcr.io/erikjearl/mc-server-operator
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# Namespace to watch for MinecraftServer CRDs (empty = all namespaces)
+watchNamespace: ""
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: mc-operator

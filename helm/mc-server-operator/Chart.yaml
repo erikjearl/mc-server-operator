@@ -1,0 +1,14 @@
+apiVersion: v2
+name: mc-server-operator
+description: Kubernetes operator and supporting services for MC SpeedRun World Server Hoster
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - minecraft
+  - kubernetes
+  - operator
+  - speedrun
+home: https://github.com/erikjearl/mc-server-operator
+maintainers:
+  - name: erikjearl
