@@ -1,9 +1,9 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: minecraftservers.mc.homelab.io
+  name: minecraftservers.mc.erikjearl.io
 spec:
-  group: mc.homelab.io
+  group: mc.erikjearl.io
   names:
     kind: MinecraftServer
     listKind: MinecraftServerList
@@ -13,7 +13,7 @@ spec:
       - mcs
   scope: Namespaced
   versions:
-    - name: v1
+    - name: v1alpha1
       served: true
       storage: true
       subresources:
@@ -27,55 +27,37 @@ spec:
               required:
                 - gameVersion
               properties:
-                seed:
-                  type: string
-                  description: "World generation seed for the speedrun"
                 gameVersion:
                   type: string
-                  description: "Minecraft version (e.g. 1.16.1)"
-                gameMode:
-                  type: string
-                  enum: [survival, creative, adventure, hardcore]
-                  default: survival
-                difficulty:
-                  type: string
-                  enum: [peaceful, easy, normal, hard]
-                  default: normal
-                maxPlayers:
-                  type: integer
-                  default: 4
-                  minimum: 1
-                  maximum: 20
-                allowCheats:
-                  type: boolean
-                  default: false
-                whitelistedUsers:
-                  type: array
-                  items:
+                  description: Minecraft version (e.g. 1.16.1)
+                serverProperties:
+                  type: object
+                  description: Additional server.properties settings
+                  additionalProperties:
                     type: string
-                metadataPreset:
-                  type: string
-                  description: "Named speedrun config preset (e.g. java-1.16-any%)"
-                ttlSeconds:
-                  type: integer
-                  description: "Auto-delete server after this many seconds"
-                  minimum: 0
             status:
               type: object
-              x-kubernetes-preserve-unknown-fields: true
+              properties:
+                phase:
+                  type: string
+                port:
+                  type: integer
+                address:
+                  type: string                  
+                deploymentRef:
+                  type: string
+                serviceRef:
+                  type: string
       additionalPrinterColumns:
-        - name: Version
-          type: string
-          jsonPath: .spec.gameVersion
-        - name: Seed
-          type: string
-          jsonPath: .spec.seed
         - name: Phase
           type: string
           jsonPath: .status.phase
         - name: Port
           type: integer
           jsonPath: .status.port
+        - name: Version
+          type: string
+          jsonPath: .spec.gameVersion
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
