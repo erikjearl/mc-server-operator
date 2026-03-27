@@ -1,94 +1,47 @@
 """
-MC SpeedRun World Server Hoster — Kopf Operator
+MC Server Operator — Kopf Operator
 Watches MinecraftServer CRDs and manages Minecraft pod lifecycle.
 """
 
 import kopf
 import kubernetes
 import logging
+import os
+
+from helpers import build_deployment, build_service, build_pvc, get_node_address
 
 # ---------------------------------------------------------------------------
-# Kubernetes client setup
+# Operator Setup
 # ---------------------------------------------------------------------------
 
-kubernetes.config.load_incluster_config() if False else kubernetes.config.load_kube_config()
+try:
+    kubernetes.config.load_incluster_config()
+except kubernetes.config.ConfigException:
+    kubernetes.config.load_kube_config()
+
 apps_v1 = kubernetes.client.AppsV1Api()
 core_v1 = kubernetes.client.CoreV1Api()
 
-GROUP = "mc.homelab.io"
-VERSION = "v1"
+GROUP = "mc.erikjearl.io"
+VERSION = "v1alpha1"
 PLURAL = "minecraftservers"
-MC_IMAGE = "itzg/minecraft-server"
-NAMESPACE = "default"
 
+@kopf.on.startup()
+def on_startup(logger, settings, **kwargs):
+    """Configure the operator on startup."""
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+    # Logging level — override with LOG_LEVEL env var (e.g. DEBUG, WARNING)
+    log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(
+        level=getattr(logging, log_level, logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    logger.info(f"mc-server-operator starting (log level: {log_level})")
 
-def build_deployment(name: str, spec: dict) -> dict:
-    """Build a Kubernetes Deployment manifest for a Minecraft server pod."""
-    seed = spec.get("seed", "")
-    game_version = spec.get("gameVersion", "LATEST")
-    game_mode = spec.get("gameMode", "survival").upper()
-    difficulty = spec.get("difficulty", "normal").upper()
-    max_players = str(spec.get("maxPlayers", 4))
-    allow_cheats = "true" if spec.get("allowCheats", False) else "false"
+    # Kopf posting settings — reduce noise from status patch retries
+    settings.posting.level = logging.WARNING
 
-    return {
-        "apiVersion": "apps/v1",
-        "kind": "Deployment",
-        "metadata": {
-            "name": name,
-            "labels": {"app": name, "managed-by": "mc-operator"},
-        },
-        "spec": {
-            "replicas": 1,
-            "selector": {"matchLabels": {"app": name}},
-            "template": {
-                "metadata": {"labels": {"app": name}},
-                "spec": {
-                    "containers": [
-                        {
-                            "name": "minecraft",
-                            "image": MC_IMAGE,
-                            "env": [
-                                {"name": "EULA", "value": "TRUE"},
-                                {"name": "VERSION", "value": game_version},
-                                {"name": "MODE", "value": game_mode},
-                                {"name": "DIFFICULTY", "value": difficulty},
-                                {"name": "MAX_PLAYERS", "value": max_players},
-                                {"name": "ALLOW_CHEATS", "value": allow_cheats},
-                                {"name": "SEED", "value": seed},
-                            ],
-                            "ports": [{"containerPort": 25565, "protocol": "TCP"}],
-                            "resources": {
-                                "requests": {"memory": "1Gi", "cpu": "500m"},
-                                "limits": {"memory": "2Gi", "cpu": "2"},
-                            },
-                        }
-                    ]
-                },
-            },
-        },
-    }
-
-
-def build_service(name: str) -> dict:
-    """Build a NodePort Service to expose the Minecraft port."""
-    return {
-        "apiVersion": "v1",
-        "kind": "Service",
-        "metadata": {
-            "name": name,
-            "labels": {"app": name, "managed-by": "mc-operator"},
-        },
-        "spec": {
-            "type": "NodePort",
-            "selector": {"app": name},
-            "ports": [{"port": 25565, "targetPort": 25565, "protocol": "TCP"}],
-        },
-    }
+    logger.info("MC Operator startup complete — watching MinecraftServer resources")
 
 
 # ---------------------------------------------------------------------------
@@ -97,17 +50,23 @@ def build_service(name: str) -> dict:
 
 @kopf.on.create(GROUP, VERSION, PLURAL)
 def on_create(spec, name, namespace, logger, patch, **kwargs):
-    """Handle MinecraftServer creation — spin up Deployment + Service."""
+    """Handle MinecraftServer creation — spin up PVC, Deployment, and Service."""
     logger.info(f"Creating MinecraftServer: {name}")
 
+    # Create PVC
+    pvc = build_pvc(name, namespace)
+    kopf.adopt(pvc)
+    core_v1.create_namespaced_persistent_volume_claim(namespace=namespace, body=pvc)
+    logger.info(f"PVC created for {name}")
+
     # Create Deployment
-    deployment = build_deployment(name, spec)
+    deployment = build_deployment(name, namespace, spec)
     kopf.adopt(deployment)
     apps_v1.create_namespaced_deployment(namespace=namespace, body=deployment)
     logger.info(f"Deployment created for {name}")
 
     # Create Service
-    service = build_service(name)
+    service = build_service(name, namespace)
     kopf.adopt(service)
     svc = core_v1.create_namespaced_service(namespace=namespace, body=service)
     node_port = svc.spec.ports[0].node_port
@@ -116,7 +75,9 @@ def on_create(spec, name, namespace, logger, patch, **kwargs):
     # Update CRD status
     patch.status["phase"] = "Running"
     patch.status["port"] = node_port
-    patch.status["message"] = f"Server started on port {node_port}"
+    patch.status["address"] = get_node_address(core_v1, node_port)
+    patch.status["deploymentRef"] = name
+    patch.status["serviceRef"] = name
 
 
 @kopf.on.update(GROUP, VERSION, PLURAL)
@@ -124,7 +85,7 @@ def on_update(spec, name, namespace, logger, **kwargs):
     """Handle MinecraftServer updates — reconcile Deployment spec."""
     logger.info(f"Updating MinecraftServer: {name}")
 
-    deployment = build_deployment(name, spec)
+    deployment = build_deployment(name, namespace, spec)
     apps_v1.patch_namespaced_deployment(name=name, namespace=namespace, body=deployment)
     logger.info(f"Deployment updated for {name}")
 
@@ -133,18 +94,3 @@ def on_update(spec, name, namespace, logger, **kwargs):
 def on_delete(name, namespace, logger, **kwargs):
     """Handle MinecraftServer deletion — owned resources are garbage-collected."""
     logger.info(f"MinecraftServer {name} deleted — owned resources will be cleaned up.")
-
-
-# ---------------------------------------------------------------------------
-# TTL enforcement (runs periodically)
-# ---------------------------------------------------------------------------
-
-@kopf.timer(GROUP, VERSION, PLURAL, interval=60)
-def ttl_check(spec, name, namespace, logger, patch, **kwargs):
-    """Periodically check if the server has exceeded its TTL and delete it."""
-    ttl = spec.get("ttlSeconds")
-    if not ttl:
-        return
-
-    # TODO: implement idle/uptime tracking and auto-delete when TTL exceeded
-    logger.debug(f"TTL check for {name}: ttlSeconds={ttl} (tracking not yet implemented)")

@@ -1,17 +1,16 @@
 # Example MinecraftServer resource — basic speedrun server
-apiVersion: mc.homelab.io/v1
+apiVersion: mc.erikjearl.io/v1alpha1
 kind: MinecraftServer
 metadata:
   name: speedrun-1-16
   namespace: default
 spec:
-  seed: "-1234567890"
   gameVersion: "1.16.1"
-  gameMode: survival
-  difficulty: normal
-  maxPlayers: 2
-  allowCheats: false
-  whitelistedUsers:
-    - "runner1"
-  metadataPreset: "java-1.16-any%"
-  ttlSeconds: 7200
+  serverProperties:
+    GAMEMODE: survival
+    DIFFICULTY: normal
+    MAX_PLAYERS: "2"
+    SEED: "-1234567890"
+    MOTD: "Speedrun practice server"
+    ONLINE_MODE: "true"
+    WHITE_LIST: "true"
