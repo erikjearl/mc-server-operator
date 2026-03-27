@@ -46,33 +46,79 @@ Minecraft server to connect to — without any manual setup.
 
 ## 5. CRD Spec Fields
 
-| Field | Type | Example | Description |
-|-------|------|---------|-------------|
-| seed | string | "-1234567890" | World generation seed |
-| gameVersion | string | "1.16.1" | Minecraft version |
-| gameMode | string | "survival" | Game mode |
-| difficulty | string | "normal" | Server difficulty |
-| maxPlayers | integer | 4 | Max simultaneous players |
-| allowCheats | boolean | false | Whether /gamemode is permitted |
-| whitelistedUsers | []string | ["runner1"] | MC usernames allowed to join |
-| metadataPreset | string | "java-1.16-any%" | Named speedrun config preset |
-| ttlSeconds | integer | 3600 | Auto-delete after idle seconds |
+The `MinecraftServer` CRD (`mc.erikjearl.io/v1alpha1`) has been simplified to two spec fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `gameVersion` | string | ✅ | Minecraft version (e.g. `"1.16.1"` or `"LATEST"`) |
+| `serverProperties` | map[string]string | ❌ | Free-form map of [`itzg/minecraft-server`](https://github.com/itzg/docker-minecraft-server) env var overrides |
+
+All server configuration (seed, game mode, difficulty, max players, whitelist, etc.) is passed through `serverProperties` as `itzg/minecraft-server` environment variable names. This avoids maintaining a fixed list of fields in the CRD schema and exposes the full configuration surface of the upstream image.
+
+**Example:**
+
+```yaml
+spec:
+  gameVersion: "1.16.1"
+  serverProperties:
+    GAMEMODE: survival
+    DIFFICULTY: normal
+    MAX_PLAYERS: "2"
+    SEED: "-1234567890"
+    ONLINE_MODE: "true"
+    WHITE_LIST: "true"
+```
+
+**Status subresource fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `phase` | string | `Running` once resources are created |
+| `port` | integer | Assigned NodePort |
+| `address` | string | `<node-ip>:<port>` for the Minecraft client |
+| `deploymentRef` | string | Name of the managed Deployment |
+| `serviceRef` | string | Name of the managed Service |
+
+`kubectl get mcs` printer columns: **Phase**, **Port**, **Version**, **Age**.
 
 ## 6. Operator (Kopf / Python)
+
+### Code Layout
+
+| File | Purpose |
+|------|---------|
+| `operator/main.py` | Kopf event handlers (`on_startup`, `on_create`, `on_update`, `on_delete`) |
+| `operator/helpers.py` | Pure manifest-builder functions and utilities |
 
 ### Responsibilities
 
 - Watch for `MinecraftServer` CRD create / update / delete events
-- Reconcile desired state: create Deployment + Service per CRD
-- Monitor pod health and restart failed servers
-- Enforce TTL: delete pods after idle timeout expires
-- Report status (IP, port, phase) back to CRD status subresource
+- Reconcile desired state: create **PVC + Deployment + Service** per CRD (all owned by the CR for automatic garbage-collection on delete)
+- Report status (`phase`, `port`, `address`, `deploymentRef`, `serviceRef`) back to the CRD status subresource
+- Monitor pod health via Kubernetes readiness/liveness probes (no operator-level polling needed)
+- _(Not yet implemented)_ Enforce TTL: delete resources after idle timeout expires
 
-### Why Kopf?
+### Resource provisioning (`on_create`)
 
-Kopf (Kubernetes Operator Pythonic Framework) is lightweight, readable, and easy to extend.
-Perfect for a home lab prototype. Can always be rewritten in Go (Operator SDK / Kubebuilder)
-if production scale requires it.
+1. `build_pvc(name, namespace)` → PVC (`5Gi`, `ReadWriteOnce`, no explicit `storageClassName`)
+2. `build_deployment(name, namespace, spec)` → Deployment with:
+   - Image: `itzg/minecraft-server:latest`
+   - Env built by `build_env(spec)`: always injects `EULA=TRUE` and `VERSION`, then merges all `spec.serverProperties` key/value pairs
+   - Resource requests: `2Gi` memory / `500m` CPU; limits: `3Gi` / `2000m`
+   - Recreate strategy (avoids two pods writing to the same PVC)
+   - Readiness probe: `tcpSocket:25565`, initial delay 60 s, period 10 s, failure threshold 6
+   - Liveness probe: `tcpSocket:25565`, initial delay 120 s, period 30 s, failure threshold 3
+   - `/data` volume mount backed by the PVC
+3. `build_service(name, namespace)` → NodePort Service; the assigned port is read back from the API response and written to `status.port`
+4. `get_node_address(core_v1, node_port)` → resolves the first `InternalIP` of any Ready node and writes `<ip>:<port>` to `status.address`
+
+### Configuration
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `LOG_LEVEL` | `INFO` | Python logging level (`DEBUG`, `WARNING`, etc.) |
+
+Kopf's own status-posting level is clamped to `WARNING` to reduce noise from patch retries.
 
 ## 7. Web UI
 
