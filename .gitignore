@@ -25,3 +25,7 @@ charts/*.tgz
 # OS
 .DS_Store
 Thumbs.db
+
+# Cline
+.clinerules/
+memory-bank/
