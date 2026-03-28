@@ -49,15 +49,12 @@ spec:
                 serviceRef:
                   type: string
       additionalPrinterColumns:
-        - name: Phase
-          type: string
-          jsonPath: .status.phase
-        - name: Port
-          type: integer
-          jsonPath: .status.port
         - name: Version
           type: string
           jsonPath: .spec.gameVersion
+        - name: Address
+          type: string
+          jsonPath: .status.address
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp

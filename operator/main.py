@@ -54,23 +54,43 @@ def on_create(spec, name, namespace, logger, patch, **kwargs):
     logger.info(f"Creating MinecraftServer: {name}")
 
     # Create PVC
-    pvc = build_pvc(name, namespace)
+    pvc = build_pvc(name, namespace, storage_class="local-path")
     kopf.adopt(pvc)
-    core_v1.create_namespaced_persistent_volume_claim(namespace=namespace, body=pvc)
-    logger.info(f"PVC created for {name}")
+    try:
+        core_v1.create_namespaced_persistent_volume_claim(namespace=namespace, body=pvc)
+        logger.info(f"PVC created for {name}")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status == 409:
+            logger.info(f"PVC for {name} already exists — skipping creation")
+        else:
+            raise
 
     # Create Deployment
     deployment = build_deployment(name, namespace, spec)
     kopf.adopt(deployment)
-    apps_v1.create_namespaced_deployment(namespace=namespace, body=deployment)
-    logger.info(f"Deployment created for {name}")
+    try:
+        apps_v1.create_namespaced_deployment(namespace=namespace, body=deployment)
+        logger.info(f"Deployment created for {name}")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status == 409:
+            logger.info(f"Deployment for {name} already exists — skipping creation")
+        else:
+            raise
 
     # Create Service
     service = build_service(name, namespace)
     kopf.adopt(service)
-    svc = core_v1.create_namespaced_service(namespace=namespace, body=service)
-    node_port = svc.spec.ports[0].node_port
-    logger.info(f"Service created for {name} on NodePort {node_port}")
+    try:
+        svc = core_v1.create_namespaced_service(namespace=namespace, body=service)
+        node_port = svc.spec.ports[0].node_port
+        logger.info(f"Service created for {name} on NodePort {node_port}")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status == 409:
+            logger.info(f"Service for {name} already exists — reading back node_port")
+            svc = core_v1.read_namespaced_service(name=name, namespace=namespace)
+            node_port = svc.spec.ports[0].node_port
+        else:
+            raise
 
     # Update CRD status
     patch.status["phase"] = "Running"
@@ -83,11 +103,11 @@ def on_create(spec, name, namespace, logger, patch, **kwargs):
 @kopf.on.update(GROUP, VERSION, PLURAL)
 def on_update(spec, name, namespace, logger, **kwargs):
     """Handle MinecraftServer updates — reconcile Deployment spec."""
-    logger.info(f"Updating MinecraftServer: {name}")
-
-    deployment = build_deployment(name, namespace, spec)
-    apps_v1.patch_namespaced_deployment(name=name, namespace=namespace, body=deployment)
-    logger.info(f"Deployment updated for {name}")
+    logger.info(f"Detected Update for MinecraftServer: {name}")
+    # TODO: Possible patch to services?
+    # deployment = build_deployment(name, namespace, spec)
+    # apps_v1.patch_namespaced_deployment(name=name, namespace=namespace, body=deployment)
+    # logger.info(f"Deployment updated for {name}")
 
 
 @kopf.on.delete(GROUP, VERSION, PLURAL)

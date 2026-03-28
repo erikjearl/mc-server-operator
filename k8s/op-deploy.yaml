@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mc-operator
+  namespace: mc-operator
+  labels:
+    app: mc-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mc-operator
+  template:
+    metadata:
+      labels:
+        app: mc-operator
+    spec:
+      serviceAccountName: mc-operator
+      containers:
+        - name: mc-operator
+          image: ghcr.io/erikjearl/mc-server-operator:latest
+          imagePullPolicy: Always
+          env:
+            - name: LOG_LEVEL
+              value: "INFO"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

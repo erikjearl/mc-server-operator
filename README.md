@@ -46,15 +46,8 @@ mc-server-operator/
 │   ├── helpers.py       # Manifest builders and utilities
 │   ├── requirements.txt
 │   └── Dockerfile
-├── crd/
-│   └── minecraftserver-crd.yaml
 ├── helm/
 │   └── mc-server-operator/
-├── examples/
-│   ├── basic-server.yaml              # Example MinecraftServer CR
-│   └── basic-server-deployment.yaml   # What the operator generates from it
-└── docs/
-    └── design.md
 ```
 
 ## Running locally

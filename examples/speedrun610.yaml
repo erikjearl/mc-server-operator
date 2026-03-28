@@ -1,0 +1,41 @@
+# MinecraftServer — 1.16.1 SSG speedrun practice server
+# Seed 610078158392268040: well-known 1.16 Any% SSG seed
+apiVersion: mc.erikjearl.io/v1alpha1
+kind: MinecraftServer
+metadata:
+  name: speedrun610
+spec:
+  gameVersion: "1.16.1"
+  serverProperties:
+    # Server type — must be VANILLA for a legitimate speedrun environment
+    TYPE: VANILLA
+    # JVM heap — 1G default causes GC stutters; 2G matches container request
+    MEMORY: 2G
+
+    # World settings
+    SEED: "610078158392268040"
+    LEVEL_TYPE: DEFAULT
+    GENERATE_STRUCTURES: "true"   # required — villages, temples, stronghold, fortress
+
+    # Gameplay
+    GAMEMODE: survival
+    DIFFICULTY: normal            # normal required for proper mob spawns (witch, wither skeletons)
+    FORCE_GAMEMODE: "true"        # reset players to survival on login
+    PVP: "false"                  # prevent accidental co-op kills
+    SPAWN_PROTECTION: "0"         # all players can build anywhere at spawn
+
+    # Player settings
+    MAX_PLAYERS: "4"
+    PLAYER_IDLE_TIMEOUT: "0"      # no idle kick during long attempts
+    ALLOW_FLIGHT: "true"          # prevents kick when using elytra in End cities
+
+    # Access
+    ONLINE_MODE: "true"
+    WHITE_LIST: "true"
+
+    # Practice helpers (disable for competitive play)
+    ALLOW_CHEATS: "true"          # enables /tp, /gamemode etc. for section practice
+
+    # Performance — lower view distance reduces RAM/CPU on home lab nodes
+    VIEW_DISTANCE: "10"
+    MOTD: "610078158392268040 — 1.16.1 SSG practice"

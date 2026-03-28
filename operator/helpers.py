@@ -16,7 +16,7 @@ def build_env(spec: dict) -> list:
     """
     env = [
         {"name": "EULA", "value": "TRUE"},
-        {"name": "VERSION", "value": spec.get("gameVersion", "LATEST")},
+        {"name": "VERSION", "value": spec.get("gameVersion")},
     ]
 
     for key, value in spec.get("serverProperties", {}).items():
@@ -46,6 +46,7 @@ def build_deployment(name: str, namespace: str, spec: dict) -> dict:
                         {
                             "name": "minecraft",
                             "image": MC_IMAGE,
+                            "imagePullPolicy": "Always",
                             "ports": [{"containerPort": 25565, "protocol": "TCP"}],
                             "env": build_env(spec),
                             "volumeMounts": [
@@ -110,10 +111,19 @@ def build_service(name: str, namespace: str, node_port: int = None) -> dict:
 def get_node_address(core_v1, node_port: int) -> str:
     """
     Return '<node-ip>:<node_port>' for the first Ready node with an InternalIP.
-    NodePort is available on every node, so any node IP is valid.
+    NodePort is available on every node so any node IP is valid, but we prefer
+    a node that is reporting Ready to avoid returning a stale/down address.
     """
+    def is_ready(node) -> bool:
+        for condition in (node.status.conditions or []):
+            if condition.type == "Ready":
+                return condition.status == "True"
+        return False
+
     nodes = core_v1.list_node()
-    for node in nodes.items:
+    ready_nodes = [n for n in nodes.items if is_ready(n)]
+    candidates = ready_nodes or nodes.items
+    for node in candidates:
         for addr in node.status.addresses:
             if addr.type == "InternalIP":
                 return f"{addr.address}:{node_port}"
