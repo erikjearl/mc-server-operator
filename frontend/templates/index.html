@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MC Server Launcher</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      color: #5cb85c;
+      margin-bottom: 0.25rem;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      color: #aaa;
+      margin-bottom: 1.5rem;
+    }
+
+    .banner {
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+    }
+    .banner.error   { background: #4a1a1a; border-left: 4px solid #e05252; }
+    .banner.success { background: #1a3a1a; border-left: 4px solid #5cb85c; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      max-width: 1100px;
+    }
+
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 10px;
+      padding: 1.5rem;
+    }
+
+    .card h3 {
+      font-size: 1.1rem;
+      color: #5cb85c;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid #0f3460;
+      padding-bottom: 0.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 0.25rem;
+      margin-top: 0.85rem;
+    }
+    label:first-of-type { margin-top: 0; }
+
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      background: #0d1b2a;
+      border: 1px solid #0f3460;
+      border-radius: 5px;
+      color: #e0e0e0;
+      font-size: 0.95rem;
+    }
+
+    input[type="text"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #5cb85c;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    button[type="submit"] {
+      margin-top: 1.25rem;
+      width: 100%;
+      padding: 0.65rem;
+      background: #5cb85c;
+      color: #111;
+      font-weight: 700;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button[type="submit"]:hover { background: #4cae4c; }
+
+    /* Server list */
+    .server-list { display: flex; flex-direction: column; gap: 0.85rem; }
+
+    .server-item {
+      background: #0d1b2a;
+      border: 1px solid #0f3460;
+      border-radius: 7px;
+      padding: 0.9rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .server-info { flex: 1; }
+
+    .server-name {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #e0e0e0;
+    }
+
+    .server-meta {
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 0.2rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-left: 0.4rem;
+    }
+    .badge.running  { background: #1a3a1a; color: #5cb85c; }
+    .badge.pending  { background: #3a3a1a; color: #d4a017; }
+    .badge.unknown  { background: #2a2a2a; color: #888; }
+
+    .delete-btn {
+      background: transparent;
+      border: 1px solid #8b3a3a;
+      color: #e05252;
+      border-radius: 5px;
+      padding: 0.3rem 0.7rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .delete-btn:hover { background: #4a1a1a; }
+
+    .empty { color: #555; font-size: 0.9rem; text-align: center; padding: 2rem 0; }
+  </style>
+</head>
+<body>
+
+<h1>⛏️ MC Server Launcher</h1>
+<h2>Namespace: {{ namespace }}</h2>
+
+{% if error %}
+  <div class="banner error">⚠️ {{ error }}</div>
+{% endif %}
+{% if success %}
+  <div class="banner success">✅ {{ success }}</div>
+{% endif %}
+
+<div class="grid">
+
+  <!-- ── Left: Launch Form ── -->
+  <div class="card">
+    <h3>Launch New Server</h3>
+    <form method="POST" action="/servers/create">
+
+      <div class="row">
+        <div>
+          <label for="name">Server Name *</label>
+          <input id="name" name="name" type="text" placeholder="my-server" required />
+        </div>
+        <div>
+          <label for="game_version">Game Version *</label>
+          <input id="game_version" name="game_version" type="text" placeholder="1.21.4" required />
+        </div>
+      </div>
+
+      <label for="seed">Seed (blank = random)</label>
+      <input id="seed" name="seed" type="text" placeholder="610078158392268040" />
+
+      <div class="row">
+        <div>
+          <label for="gamemode">Gamemode</label>
+          <select id="gamemode" name="gamemode">
+            <option value="survival">survival</option>
+            <option value="creative">creative</option>
+            <option value="adventure">adventure</option>
+            <option value="spectator">spectator</option>
+          </select>
+        </div>
+        <div>
+          <label for="difficulty">Difficulty</label>
+          <select id="difficulty" name="difficulty">
+            <option value="peaceful">peaceful</option>
+            <option value="easy">easy</option>
+            <option value="normal" selected>normal</option>
+            <option value="hard">hard</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="max_players">Max Players</label>
+          <input id="max_players" name="max_players" type="text" value="4" />
+        </div>
+        <div>
+          <label for="memory">Memory</label>
+          <input id="memory" name="memory" type="text" value="2G" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="online_mode">Online Mode</label>
+          <select id="online_mode" name="online_mode">
+            <option value="true" selected>true</option>
+            <option value="false">false</option>
+          </select>
+        </div>
+        <div>
+          <label for="whitelist">Whitelist</label>
+          <select id="whitelist" name="whitelist">
+            <option value="false" selected>false</option>
+            <option value="true">true</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="motd">MOTD (optional)</label>
+      <input id="motd" name="motd" type="text" placeholder="Speedrun practice server" />
+
+      <button type="submit">🚀 Launch Server</button>
+    </form>
+  </div>
+
+  <!-- ── Right: Active Servers ── -->
+  <div class="card">
+    <h3>Active Servers ({{ servers | length }})</h3>
+
+    {% if servers %}
+      <div class="server-list">
+        {% for s in servers %}
+          {% set status = s.get("status", {}) %}
+          {% set phase  = status.get("phase", "Pending") %}
+          {% set badge_class = "running" if phase == "Running" else ("pending" if phase == "Pending" else "unknown") %}
+          <div class="server-item">
+            <div class="server-info">
+              <div class="server-name">
+                {{ s.metadata.name }}
+                <span class="badge {{ badge_class }}">{{ phase }}</span>
+              </div>
+              <div class="server-meta">
+                v{{ s.spec.gameVersion }}
+                {% if status.get("address") %}
+                  &nbsp;·&nbsp; 🌐 {{ status.address }}
+                {% endif %}
+                {% if status.get("port") %}
+                  &nbsp;·&nbsp; Port {{ status.port }}
+                {% endif %}
+              </div>
+            </div>
+            <form method="POST" action="/servers/{{ s.metadata.name }}/delete"
+                  onsubmit="return confirm('Delete {{ s.metadata.name }}?')">
+              <button class="delete-btn" type="submit">Delete</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty">No servers running.<br/>Launch one with the form →</p>
+    {% endif %}
+  </div>
+
+</div>
+
+</body>
+</html>
