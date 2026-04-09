@@ -1,5 +1,5 @@
 """
-MC Server Operator — Kopf Operator
+MC Server Operator
 Watches MinecraftServer CRDs and manages Minecraft pod lifecycle.
 """
 
